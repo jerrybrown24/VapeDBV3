@@ -1,28 +1,26 @@
-/* ────── Galaxy “deep-space” gradient ────── */
-body {
-  background: radial-gradient(circle at 20% 30%, #23033d 0%, #0d0130 35%, #000013 100%);
-  color: #E0E0E0;
-  font-family: "Inter", sans-serif;
+/* ─── Deep-space galaxy gradient ─── */
+body{
+  background:radial-gradient(circle at 20% 30%, #23033d 0%, #0d0130 35%, #000013 100%);
+  color:#E0E0E0;font-family:"Inter",sans-serif;
 }
 
-/* Existing smoke layers (keep) */
-.smoke-layer, .smoke-layer-2 { position:fixed; inset:0; pointer-events:none; z-index:-2; }
+/* Existing smoke layers remain */
+.smoke-layer,.smoke-layer-2{position:fixed;inset:0;pointer-events:none;z-index:-2}
 
-/* ────── NEW drifting star-field overlay ────── */
-@keyframes driftStars {
-  0%   { background-position: 0 0; }
-  100% { background-position: -2000px 1000px; }
+/* ─── Star-field overlay (image set inline from app.py) ─── */
+.starfield{
+  position:fixed;inset:0;pointer-events:none;z-index:-5;
+  background-size:600px;opacity:.30;
+  animation:driftStars 200s linear infinite;
 }
-.starfield {
-  position:fixed; inset:0;
-  background:url("https://raw.githubusercontent.com/priya-dwivedi/StarGAN/master/assets/starfield.png") repeat;
-  opacity:.30; animation:driftStars 200s linear infinite;
-  pointer-events:none; z-index:-3;
+@keyframes driftStars{
+  0%{background-position:0 0}
+  100%{background-position:-2000px 1500px}
 }
 
-/* Button styling (unchanged) */
-.stButton > button{
-  border-radius:8px; padding:0.4rem 1rem;
-  background-image:linear-gradient(90deg,#00c6ff 0%, #0072ff 100%);
-  color:#fff; border:none;
+/* Buttons */
+.stButton>button{
+  border-radius:8px;padding:.4rem 1rem;
+  background-image:linear-gradient(90deg,#00c6ff 0%,#0072ff 100%);
+  color:#fff;border:none;
 }
