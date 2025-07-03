@@ -256,7 +256,8 @@ with rules_tab:
     rules=association_rules(freq,metric="confidence",min_threshold=conf)
 
     if rules.empty():
-        st.warning("No rules under thresholds."); best=None
+        st.warning("No rules under thresholds.")
+        best=None
     else:
         rules=rules.sort_values("confidence",ascending=False).head(10)
         st.dataframe(rules); best=rules.iloc[0]
