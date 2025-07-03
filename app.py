@@ -79,12 +79,12 @@ with tasti:
         clf = st.selectbox("Classifier", ["KNN","Decision Tree","Random Forest","Gradient Boost"])
         X,y = users_df[core_features], users_df["SubscribeIntent"]
         X_tr,X_te,y_tr,y_te = train_test_split(X,y,test_size=0.25,stratify=y,random_state=42)
-        model = {{"KNN":KNeighborsClassifier(5),
+        model = {"KNN":KNeighborsClassifier(5),
                   "Decision Tree":DecisionTreeClassifier(max_depth=6,random_state=42),
                   "Random Forest":RandomForestClassifier(n_estimators=200,random_state=42),
-                  "Gradient Boost":GradientBoostingClassifier(random_state=42)}}[clf]
+                  "Gradient Boost":GradientBoostingClassifier(random_state=42)}[clf]
         model.fit(X_tr,y_tr); y_pred=model.predict(X_te)
-        f1=f1_score(y_te,y_pred); st.metric("F1", f"{{f1:.3f}}")
+        f1=f1_score(y_te,y_pred); st.metric("F1", f"{f1:.3f}")
         cm=confusion_matrix(y_te,y_pred); sns.heatmap(cm,annot=True,fmt="d"); st.pyplot(plt.gcf()); plt.clf()
         prob=model.predict_proba(X_te)[:,1]; fpr,tpr,_=roc_curve(y_te,prob)
         plt.plot(fpr,tpr); plt.plot([0,1],[0,1],'k--'); st.pyplot(plt.gcf()); plt.clf()
@@ -99,7 +99,7 @@ with tasti:
         users_df["Cluster"]=km.labels_
         inertias=[KMeans(i,random_state=42,n_init='auto').fit(X_scaled).inertia_ for i in range(2,11)]
         plt.plot(range(2,11), inertias,"o-"); st.pyplot(plt.gcf()); plt.clf()
-        sil=silhouette_score(X_scaled, km.labels_); st.metric("Silhouette", f"{{sil:.3f}}")
+        sil=silhouette_score(X_scaled, km.labels_); st.metric("Silhouette", f"{sil:.3f}")
         st.dataframe(users_df.groupby("Cluster")[core_features].mean().round(2))
         with st.expander("Key Insights"):
             st.markdown(f"- k={{k}}, silhouette **{{sil:.2f}}**; clusters saved for Apriori.") 
@@ -111,10 +111,10 @@ with forecast:
     X = np.arange(len(trends_df)).reshape(-1,1); y = trends_df[flavor].values
     split=int(0.8*len(X)); model=LinearRegression().fit(X[:split],y[:split])
     pred=model.predict(X[split:]); r2=r2_score(y[split:],pred); rmse=np.sqrt(mean_squared_error(y[split:],pred))
-    st.metric("R²", f"{{r2:.3f}}"); st.metric("RMSE", f"{{rmse:.2f}}")
+    st.metric("R²", f"{r2:.3f}"); st.metric("RMSE", f"{rmse:.2f}")
     plt.scatter(y[split:],pred); plt.plot([y.min(),y.max()],[y.min(),y.max()],'k--'); st.pyplot(plt.gcf()); plt.clf()
     with st.expander("Key Insights"):
-        slopes={{c: np.polyfit(np.arange(len(trends_df)), trends_df[c],1)[0] for c in trends_df.columns[1:]}}
+        slopes = {c: np.polyfit(np.arange(len(trends_df)), trends_df[c], 1)[0] for c in trends_df.columns[1:]}
         top=max(slopes,key=slopes.get)
         st.markdown(f"- Steepest trend: **{{top}}**.")
         st.markdown(f"- Current model R² **{{r2:.2f}}**.")
