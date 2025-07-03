@@ -255,7 +255,7 @@ with rules_tab:
     freq=apriori(basket,min_support=sup,use_colnames=True)
     rules=association_rules(freq,metric="confidence",min_threshold=conf)
 
-    if rules.empty():
+    if rules.empty:
         st.warning("No rules under thresholds.")
         best=None
     else:
