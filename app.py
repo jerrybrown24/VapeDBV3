@@ -218,6 +218,3 @@ with rules_tab:
             st.markdown(f"- Top rule: **{best['antecedents']}→{best['consequents']}** (confidence {best['confidence']:.2f}).")
         st.markdown("- Data: flavour + channel one-hot; core metric: confidence / lift.")
 
-app_py = template.replace("{B64}", b64_img)
-with open("app.py", "w") as f:
-    f.write(app_py)
