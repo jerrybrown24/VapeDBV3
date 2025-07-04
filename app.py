@@ -98,9 +98,15 @@ with viz:
         st.stop()
 
     ## 1 Violin (Age)
-    fig, ax = plt.subplots(); sns.violinplot(data=df, y="Age", inner="box", ax=ax)
-    st.pyplot(fig); plt.close(fig)
-    st.caption("Full age spread; multi-modal shapes hint at distinct age cohorts to target.")
+     hex_fig = px.density_heatmap(
+        df, x="Age", y="PodsPerWeek",
+        nbinsx=30, nbinsy=15,
+        color_continuous_scale="magma",
+        title="Density of Consumption by Age"
+    )
+    st.plotly_chart(hex_fig, use_container_width=True)
+    st.caption("Hot-spots reveal which age bands are heavy users.\n"
+               "Darker cells indicate more vapers in that age-volume bin.")
 
     ## 2 Scatter Pods vs Age
     fig, ax = plt.subplots(); sns.scatterplot(data=df,x="Age",y="PodsPerWeek",ax=ax)
