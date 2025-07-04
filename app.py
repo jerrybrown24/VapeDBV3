@@ -1,9 +1,10 @@
-# ───────── VaporIQ Dashboard  • v7  ─────────
-# Full app.py with:
-#  • Flicker-proof galaxy star-field behind a slow smoke overlay
-#  • Data-Viz, TasteDNA (extra metrics), Forecast (regressor selector) & Apriori tabs
-#  • All earlier captions / key-insights
-# -------------------------------------------
+# ───────── VaporIQ Dashboard  • v8  ─────────
+# full app.py with:
+#  • Flicker-proof galaxy star-field & slow smoke overlay
+#  • New Data-Viz charts (hexbin, parallel, radar, adoption curve, monthly heat)
+#  • Extra metrics, regressor selector, Apriori tab, etc.
+#  • Works with starfield.png, style.css, watermark, synthetic CSVs
+# -------------------------------------------------------
 
 import streamlit as st, pandas as pd, numpy as np, matplotlib.pyplot as plt, seaborn as sns, plotly.express as px
 from pathlib import Path
@@ -21,21 +22,20 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from mlxtend.frequent_patterns import apriori, association_rules
 
-# ─────────────────────  Page & Gradient  ─────────────────────
+# ─────────────────────  Page & base CSS  ─────────────────────
 st.set_page_config(page_title="VaporIQ Galaxy", layout="wide")
 with open("style.css") as css:
     st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
 
-# ─────────  Galaxy star-field (body::before)  ─────────
+# ─────────  Galaxy star-field via body::before  ─────────
 star_path = Path(__file__).with_name("starfield.png")
 if star_path.exists():
     star_b64 = base64.b64encode(star_path.read_bytes()).decode()
     st.markdown(textwrap.dedent(f"""
         <style>
-        /* Deep-space gradient already in style.css; now add drifting stars */
         body::before {{
             content:"";
-            position:fixed; inset:0; z-index:-4;       /* below smoke, above gradient */
+            position:fixed; inset:0; z-index:-4;
             pointer-events:none;
             background:url("data:image/png;base64,{star_b64}") repeat;
             background-size:600px;
@@ -43,11 +43,10 @@ if star_path.exists():
             animation:starDrift 240s linear infinite;
         }}
         @keyframes starDrift {{
-          0%   {{transform:translate3d(0,0,0);}}
-          100% {{transform:translate3d(-2000px,1500px,0);}}
+            0%   {{ transform:translate3d(0,0,0); }}
+            100% {{ transform:translate3d(-2000px,1500px,0); }}
         }}
-
-        /* Slow, opposing smoke flow */
+        /* slow smoke */
         .smoke-layer    {{animation:smokeFlow 210s linear infinite;  opacity:.25;}}
         .smoke-layer-2  {{animation:smokeFlowR 280s linear infinite; opacity:.15;}}
         @keyframes smokeFlow  {{0%{{background-position:0 0}} 100%{{background-position:1600px 0}}}}
@@ -55,22 +54,25 @@ if star_path.exists():
         </style>
     """), unsafe_allow_html=True)
 else:
-    st.sidebar.error("⚠️ `starfield.png` not found – galaxy backdrop disabled.")
+    st.sidebar.error("⚠️ `starfield.png` missing – galaxy backdrop disabled.")
 
-# Inject smoke divs (they rely on CSS above)
+# smoke divs
 st.markdown('<div class="smoke-layer"></div>',  unsafe_allow_html=True)
 st.markdown('<div class="smoke-layer-2"></div>',unsafe_allow_html=True)
 
-# ─────────  Watermark bottle  ─────────
+# watermark
 with open("vape_watermark.png","rb") as f:
     wm_b64 = base64.b64encode(f.read()).decode()
-st.markdown(f"<img src='data:image/png;base64,{wm_b64}' style='position:fixed;bottom:15px;right:15px;width:110px;opacity:.8;z-index:1;'/>",
-            unsafe_allow_html=True)
+st.markdown(f"<img src='data:image/png;base64,{wm_b64}' style='position:fixed;bottom:15px;right:15px;width:110px;opacity:.8;z-index:1;'/>", unsafe_allow_html=True)
 
-# ─────────────────────  Data  ─────────────────────
+# ─────────────────────  Load data  ─────────────────────
 @st.cache_data
 def load_data():
-    return pd.read_csv("users_synthetic.csv"), pd.read_csv("flavor_trends.csv")
+    df_users  = pd.read_csv("users_synthetic.csv")
+    df_trends = pd.read_csv("flavor_trends.csv")
+    df_trends["Date"] = pd.to_datetime(df_trends["Date"])
+    return df_users, df_trends
+
 users_df, trends_df = load_data()
 core = ["Age","SweetLike","MentholLike","PodsPerWeek"]
 
@@ -83,93 +85,84 @@ viz, taste_tab, forecast_tab, rules_tab = st.tabs(
 with viz:
     st.header("📊 Data Visualization Explorer")
 
-    genders = st.sidebar.multiselect("Gender filter",
-                 users_df["Gender"].unique().tolist(),
-                 default=users_df["Gender"].unique().tolist())
+    # sidebar filters
+    genders  = st.sidebar.multiselect("Gender filter",
+        users_df["Gender"].unique().tolist(),
+        default=users_df["Gender"].unique().tolist())
     channels = st.sidebar.multiselect("Purchase Channel filter",
-                 users_df["PurchaseChannel"].unique().tolist(),
-                 default=users_df["PurchaseChannel"].unique().tolist())
+        users_df["PurchaseChannel"].unique().tolist(),
+        default=users_df["PurchaseChannel"].unique().tolist())
 
     df = users_df[users_df["Gender"].isin(genders) &
                   users_df["PurchaseChannel"].isin(channels)]
 
     if df.empty:
-        st.warning("No rows match current filters — tweak sidebar options.")
+        st.warning("No rows match current filters — adjust sidebar selections.")
         st.stop()
 
-    ## 1 Violin (Age)
-    fig, ax = plt.subplots(); sns.violinplot(data=df, y="Age", inner="box", ax=ax)
-    st.pyplot(fig); plt.close(fig)
-    st.caption("Full age spread; multi-modal shapes hint at distinct age cohorts to target.")
+    # ⭐ 1. Hexbin density
+    hex_fig = px.density_heatmap(
+        df, x="Age", y="PodsPerWeek",
+        nbinsx=30, nbinsy=15,
+        color_continuous_scale="magma",
+        title="Density of Consumption by Age"
+    )
+    st.plotly_chart(hex_fig, use_container_width=True)
+    st.caption("Hot-spots reveal which age bands are heavy users.\nDense orange cells = many vapers.")
 
-    ## 2 Scatter Pods vs Age
-    fig, ax = plt.subplots(); sns.scatterplot(data=df,x="Age",y="PodsPerWeek",ax=ax)
-    st.pyplot(fig); plt.close(fig)
-    st.caption("Do older vapers consume more or fewer pods? Helps with age-wise inventory planning.")
+    # ⭐ 2. Parallel-coordinates
+    par_df  = users_df[core + ["Cluster"]]
+    par_fig = px.parallel_coordinates(
+        par_df, color="Cluster",
+        title="TasteDNA Fingerprint by Cluster",
+        color_continuous_scale=px.colors.diverging.Portland
+    )
+    st.plotly_chart(par_fig, use_container_width=True)
+    st.caption("Visual fingerprint of clusters across sensory & usage traits.")
 
-    ## 3 Correlation heat-map
-    fig, ax = plt.subplots(); sns.heatmap(df[["Age","SweetLike","MentholLike","PodsPerWeek"]].corr(),
-                                          annot=True,cmap="coolwarm",ax=ax)
-    st.pyplot(fig); plt.close(fig)
-    st.caption("Quickly spots numeric relationships—strong pairs become candidate features.")
+    # ⭐ 3. Radar / spider chart
+    cent = users_df.groupby("Cluster")[core].mean().reset_index().melt(
+        id_vars="Cluster", var_name="Metric", value_name="Value")
+    radar_fig = px.line_polar(
+        cent, r="Value", theta="Metric", color="Cluster",
+        line_close=True, title="Cluster Centroids – Radar View")
+    st.plotly_chart(radar_fig, use_container_width=True)
+    st.caption("Compare clusters at a glance; spot high-sweet vs high-menthol groups.")
 
-    ## 4 Bar: flavour family counts
-    flat = df["FlavourFamilies"].str.get_dummies(sep=",").sum().sort_values(ascending=False)
-    st.bar_chart(flat)
-    st.caption("Which flavour families dominate under current filters? Guides micro-batch choices.")
-
-    ## 5 Top-3 flavour trends
-    top3 = trends_df.drop(columns="Date").mean().nlargest(3).index
-    st.plotly_chart(px.line(trends_df, x="Date", y=top3, title="Top-3 Flavour Trends"),
-                    use_container_width=True)
-    st.caption("Comparative momentum of leading flavours shapes forward-looking production.")
-
-    ## 6 Boxplot PodsPerWeek by channel
-    fig, ax = plt.subplots(); sns.boxplot(data=df,x="PurchaseChannel",y="PodsPerWeek",ax=ax)
-    st.pyplot(fig); plt.close(fig)
-    st.caption("Distribution & outliers across channels—helps craft channel-specific offers.")
-
-    ## 7 Stacked bar Intent vs Gender
-    sb = pd.crosstab(df["Gender"], df["SubscribeIntent"])
-    st.plotly_chart(px.bar(sb, barmode="stack",title="Subscribe Intent × Gender"),
-                    use_container_width=True)
-    st.caption("Visualises intent skew by gender—inform copywriting & A/B tests.")
-
-    ## 8 Rugplots Sweet & Menthol liking
+    # ⭐ 4. Cumulative adoption curve
+    cum = users_df.sort_values("UserID").SubscribeIntent.cumsum() / np.arange(1,len(users_df)+1)
     fig, ax = plt.subplots()
-    sns.rugplot(df["SweetLike"],height=.1,color="g",ax=ax,label="Sweet")
-    sns.rugplot(df["MentholLike"],height=.1,color="r",ax=ax,label="Menthol")
-    ax.legend(); st.pyplot(fig); plt.close(fig)
-    st.caption("Preference density overlay hints at flavour gaps to exploit.")
+    ax.plot(cum.index, cum.values)
+    ax.axhline(0.5, color="gray", ls="--")
+    ax.set_xlabel("User join order"); ax.set_ylabel("Cumulative % subscribed")
+    ax.set_title("Cumulative Subscribe Intent")
+    st.pyplot(fig); plt.close(fig)
+    st.caption("Shows adoption saturation and where inflection points occur.")
 
-    ## 9 Treemap cluster × flavour
-    if "Cluster" not in users_df.columns:
-        users_df["Cluster"] = KMeans(4,random_state=42,n_init="auto") \
-            .fit_predict(MinMaxScaler().fit_transform(users_df[core]))
-    tdf = users_df.assign(lead_flav=users_df["FlavourFamilies"].str.split(",").str[0])
-    st.plotly_chart(px.treemap(tdf, path=["Cluster","lead_flav"], values="PodsPerWeek"),
-                    use_container_width=True)
-    st.caption("Maps behavioural clusters to lead flavours—find underserved combos.")
+    # ⭐ 5. Monthly flavour heat-map
+    month = trends_df.set_index("Date").resample("M").mean().reset_index()
+    month["Month"] = month["Date"].dt.to_period("M").astype(str)
+    heat = month.drop(columns="Date").set_index("Month")
+    fig, ax = plt.subplots(figsize=(8,5))
+    sns.heatmap(heat.T, cmap="rocket_r", ax=ax)
+    ax.set_title("Monthly Flavour Intensity")
+    st.pyplot(fig); plt.close(fig)
+    st.caption("Seasonality and monthly spikes become obvious.")
 
-    ## 10 Cum Custard Kunafa
-    ck = trends_df.assign(cum=trends_df["Custard Kunafa"].cumsum())
-    st.plotly_chart(px.area(ck, x="Date", y="cum", title="Cumulative Mentions – Custard Kunafa"),
-                    use_container_width=True)
-    st.caption("Total buzz size—helps size micro-batch production for trending flavour.")
-
+    # insights block (unchanged)
     with st.expander("Key Insights"):
         dom_gender = df["Gender"].value_counts(normalize=True).idxmax()
         fast_flav  = trends_df.drop(columns="Date").mean().idxmax()
         st.markdown(f"- Dominant gender in current filters: **{dom_gender}**")
         st.markdown(f"- Fastest rising flavour overall: **{fast_flav}**")
-        st.markdown("- Data derived from 1 200 synthetic survey rows + 120-week trend crawl.")
+        st.markdown("- Data: 1 200 synthetic survey rows + 120-week trend crawl.")
 
 # =================== 2. TasteDNA TAB ===================
 with taste_tab:
     st.header("🔮 TasteDNA Engine")
-    m_mode = st.radio("Mode",["Classification","Clustering"],horizontal=True)
+    mode = st.radio("Mode",["Classification","Clustering"],horizontal=True)
 
-    if m_mode == "Classification":
+    if mode == "Classification":
         algo = st.selectbox("Classifier",["KNN","Decision Tree","Random Forest","Gradient Boosting"])
         tune = st.checkbox("GridSearch (5-fold F1)",False)
 
@@ -201,16 +194,16 @@ with taste_tab:
         m3.metric("Accuracy", f"{acc:.2f}")
         m4.metric("F1",       f"{f1:.2f}")
 
-        fig, ax = plt.subplots()
+        fig,ax=plt.subplots()
         sns.heatmap(confusion_matrix(y_te,y_pred),annot=True,fmt="d",cmap="Blues",ax=ax)
         st.pyplot(fig); plt.close(fig)
 
         with st.expander("Key Insights"):
-            if best: st.markdown(f"- GridSearch best params: `{best}`")
-            st.markdown(f"- Precision {prec:.2f}, Recall {rec:.2f}, F1 {f1:.2f}")
+            if best: st.markdown(f"- Best params: `{best}`")
+            st.markdown(f"- Prec {prec:.2f}, Rec {rec:.2f}, F1 {f1:.2f}")
 
     else:  # Clustering
-        k = st.slider("k clusters",2,10,4)
+        k=st.slider("k clusters",2,10,4)
         X_scaled = MinMaxScaler().fit_transform(users_df[core])
         km = KMeans(k,random_state=42,n_init="auto").fit(X_scaled)
         sil = silhouette_score(X_scaled, km.labels_)
@@ -222,7 +215,7 @@ with taste_tab:
 with forecast_tab:
     st.header("📈 Forecasting")
     flavour = st.selectbox("Flavour signal", trends_df.columns[1:])
-    reg_name = st.selectbox("Regressor",["Linear","Ridge","Lasso","Decision Tree"])
+    reg_name = st.selectbox("Regressor", ["Linear","Ridge","Lasso","Decision Tree"])
     reg_map = {"Linear":LinearRegression(),
                "Ridge":Ridge(alpha=1.0),
                "Lasso":Lasso(alpha=0.01),
@@ -230,10 +223,11 @@ with forecast_tab:
     reg = reg_map[reg_name]
 
     X = np.arange(len(trends_df)).reshape(-1,1); y = trends_df[flavour].values
-    split=int(.8*len(X)); reg.fit(X[:split],y[:split]); y_pred=reg.predict(X[split:])
+    split = int(.8*len(X))
+    reg.fit(X[:split],y[:split]); y_pred = reg.predict(X[split:])
     r2=r2_score(y[split:],y_pred); rmse=np.sqrt(mean_squared_error(y[split:],y_pred))
 
-    st.metric("R²",f"{r2:.3f}"); st.metric("RMSE",f"{rmse:.2f}")
+    st.metric("R²", f"{r2:.3f}"); st.metric("RMSE", f"{rmse:.2f}")
 
     fig,ax=plt.subplots()
     ax.scatter(y[split:],y_pred,alpha=.6)
@@ -242,25 +236,28 @@ with forecast_tab:
     st.pyplot(fig); plt.close(fig)
 
     with st.expander("Key Insights"):
-        slopes={c:np.polyfit(np.arange(len(trends_df)), trends_df[c],1)[0] for c in trends_df.columns[1:]}
+        slopes = {c: np.polyfit(np.arange(len(trends_df)), trends_df[c], 1)[0]
+                  for c in trends_df.columns[1:]}
         st.markdown(f"- Regressor **{reg_name}** → R² {r2:.2f}, RMSE {rmse:.2f}")
-        st.markdown(f"- Steepest flavour slope: **{max(slopes,key=slopes.get)}**")
+        st.markdown(f"- Steepest flavour slope: **{max(slopes, key=slopes.get)}**")
 
 # =================== 4. Apriori TAB ===================
 with rules_tab:
     st.header("🧩 Apriori Explorer")
-    sup=st.slider("Support",0.01,0.4,0.05,0.01); conf=st.slider("Confidence",0.05,1.0,0.3,0.05)
-    basket=users_df["FlavourFamilies"].str.get_dummies(sep=",").astype(bool)
-    basket=pd.concat([basket,pd.get_dummies(users_df["PurchaseChannel"],prefix="Chan").astype(bool)],axis=1)
-    freq=apriori(basket,min_support=sup,use_colnames=True)
-    rules=association_rules(freq,metric="confidence",min_threshold=conf)
+    sup = st.slider("Support",0.01,0.4,0.05,0.01)
+    conf= st.slider("Confidence",0.05,1.0,0.3,0.05)
+    basket = users_df["FlavourFamilies"].str.get_dummies(sep=",").astype(bool)
+    basket = pd.concat([basket,
+                        pd.get_dummies(users_df["PurchaseChannel"], prefix="Chan").astype(bool)],
+                        axis=1)
+    freq  = apriori(basket, min_support=sup, use_colnames=True)
+    rules = association_rules(freq, metric="confidence", min_threshold=conf)
 
     if rules.empty:
-        st.warning("No rules under thresholds.")
-        best=None
+        st.warning("No rules under these thresholds."); best=None
     else:
-        rules=rules.sort_values("confidence",ascending=False).head(10)
-        st.dataframe(rules); best=rules.iloc[0]
+        rules = rules.sort_values("confidence", ascending=False).head(10)
+        st.dataframe(rules); best = rules.iloc[0]
 
     with st.expander("Key Insights"):
         if best is not None:
