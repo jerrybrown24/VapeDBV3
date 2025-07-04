@@ -98,7 +98,7 @@ with viz:
         st.stop()
 
     ## 1 Violin (Age)
-     hex_fig = px.density_heatmap(
+    hex_fig = px.density_heatmap(
         df, x="Age", y="PodsPerWeek",
         nbinsx=30, nbinsy=15,
         color_continuous_scale="magma",
