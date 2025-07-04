@@ -102,8 +102,7 @@ with viz:
         df, x="Age", y="PodsPerWeek",
         nbinsx=30, nbinsy=15,
         color_continuous_scale="magma",
-        title="Density of Consumption by Age"
-    )
+        title="Density of Consumption by Age")
     st.plotly_chart(hex_fig, use_container_width=True)
     st.caption("Hot-spots reveal which age bands are heavy users.\n"
                "Darker cells indicate more vapers in that age-volume bin.")
